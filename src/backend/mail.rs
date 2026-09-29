@@ -15,6 +15,68 @@ struct ProviderRead<'a> {
     session: &'a Session,
 }
 
+struct ProviderDrafts<'a> {
+    session: &'a Session,
+}
+
+impl crate::mail::draft::DraftStore for ProviderDrafts<'_> {
+    fn save<'a>(
+        &'a self,
+        account: &'a crate::mail::Account,
+        raw: &'a str,
+        replace: Option<&'a str>,
+    ) -> Pin<Box<dyn Future<Output = Result<Value, &'static str>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut params = json!({"accountId":account.id,"raw":raw});
+            match account.provider {
+                Provider::Gmail => {
+                    let saved = if let Some(id) = replace {
+                        params["id"] = json!(id);
+                        self.session
+                            .gmail
+                            .call("gmail.updateDraft", &params)
+                            .await?
+                    } else {
+                        self.session.gmail.call("gmail.saveDraft", &params).await?
+                    };
+                    // List and read use message IDs; the draft resource resolves from them.
+                    Ok(json!({"draftId":saved["message"]["id"]}))
+                }
+                Provider::Imap | Provider::Outlook => {
+                    if let Some(id) = replace {
+                        params["draftId"] = json!(id);
+                    }
+                    crate::providers::imap::call("imap.saveDraft", &params).await
+                }
+                Provider::Jmap => {
+                    if let Some(id) = replace {
+                        params["draftId"] = json!(id);
+                    }
+                    self.session.jmap.call("jmap.saveDraft", &params).await
+                }
+                Provider::Hey => Err("mail_draft_unavailable"),
+            }
+        })
+    }
+
+    fn delete<'a>(
+        &'a self,
+        account: &'a crate::mail::Account,
+        id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Value, &'static str>> + Send + 'a>> {
+        Box::pin(async move {
+            let params = json!({"accountId":account.id,"id":id});
+            match account.provider {
+                Provider::Gmail => self.session.gmail.call("gmail.deleteDraft", &params).await,
+                Provider::Imap | Provider::Outlook => {
+                    crate::providers::imap::call("imap.deleteDraft", &params).await
+                }
+                Provider::Jmap | Provider::Hey => Err("mail_draft_unavailable"),
+            }
+        })
+    }
+}
+
 struct ProviderIdentities<'a> {
     session: &'a Session,
 }
@@ -346,6 +408,19 @@ impl Session {
                     &self.outbox,
                 )
                 .await
+            }
+            "mail.draft" => {
+                let request = crate::mail::DraftRequest::try_from(params)?;
+                crate::mail::draft::draft_with(
+                    request,
+                    &ProviderIdentities { session: self },
+                    &ProviderDrafts { session: self },
+                )
+                .await
+            }
+            "mail.deleteDraft" => {
+                let request = crate::mail::DeleteDraftRequest::try_from(params)?;
+                crate::mail::draft::delete_with(request, &ProviderDrafts { session: self }).await
             }
             "mail.list" => {
                 let request = ListRequest::try_from(params)?;

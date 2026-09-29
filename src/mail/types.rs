@@ -301,6 +301,44 @@ impl TryFrom<&Value> for ActRequest {
     }
 }
 
+impl TryFrom<&Value> for super::DraftRequest {
+    type Error = &'static str;
+
+    /// The fields of a send, without an outbox identity, plus the draft it replaces.
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        let mut object = value.as_object().ok_or("invalid_params")?.clone();
+        if object.contains_key("sendId") {
+            return Err("invalid_params");
+        }
+        let replace = match object.remove("replace") {
+            Some(Value::String(id)) => Some(opaque_id(&id)?),
+            Some(Value::Null) | None => None,
+            Some(_) => return Err("invalid_params"),
+        };
+        Ok(Self {
+            message: SendRequest::try_from(&Value::Object(object))?,
+            replace,
+        })
+    }
+}
+
+impl TryFrom<&Value> for super::DeleteDraftRequest {
+    type Error = &'static str;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        let object = params_object(value, &["account", "id", "execute"])?;
+        let id = object
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("invalid_params")?;
+        Ok(Self {
+            account: account(object)?,
+            id: opaque_id(id)?,
+            execute: execute(object)?,
+        })
+    }
+}
+
 impl TryFrom<&Value> for SendRequest {
     type Error = &'static str;
 

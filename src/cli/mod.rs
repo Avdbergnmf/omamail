@@ -9,7 +9,7 @@ mod output;
     name = "omamail",
     version,
     about = "Mail backend and command-line client",
-    after_help = "Examples:\n  omamail list --account me@example.org --json\n  omamail read MESSAGE_ID --json\n  omamail mark star MESSAGE_ID\n  omamail archive MESSAGE_ID\n  omamail archive MESSAGE_ID --execute\n  printf 'Hello\\n' | omamail send --to you@example.org --subject Hello --json\n\nMutations preview by default. Add --execute to apply them.\nOmitted --account uses the active account; message IDs and page tokens are opaque."
+    after_help = "Examples:\n  omamail list --account me@example.org --json\n  omamail read MESSAGE_ID --json\n  omamail mark star MESSAGE_ID\n  omamail archive MESSAGE_ID\n  omamail archive MESSAGE_ID --execute\n  printf 'Hello\\n' | omamail send --to you@example.org --subject Hello --json\n  printf 'Hello\\n' | omamail draft --to you@example.org --subject Hello --execute --json\n\nMutations preview by default. Add --execute to apply them.\nOmitted --account uses the active account; message IDs and page tokens are opaque."
 )]
 struct Cli {
     /// Print machine-readable JSON instead of human-readable tables
@@ -35,6 +35,10 @@ enum Command {
     Spam(mail::Action),
     /// Preview a message with UTF-8 body on stdin (maximum 16 MiB); --execute sends
     Send(mail::Send),
+    /// Preview saving a message (UTF-8 body on stdin) as a draft; --execute saves it. Never sends
+    Draft(mail::Draft),
+    /// Preview removing a draft; --execute removes it
+    DraftDelete(mail::DraftDelete),
     /// Serve JSON-RPC 2.0 on persistent stdin/stdout pipes
     Serve,
     #[cfg(all(feature = "agent", target_os = "linux"))]
@@ -135,6 +139,8 @@ pub fn run() {
             | Command::Trash(_)
             | Command::Spam(_)
             | Command::Send(_)
+            | Command::Draft(_)
+            | Command::DraftDelete(_)
     );
     let result = match command {
         Command::List(args) => runtime.block_on(session.dispatch("mail.list", &args.params())),
@@ -150,6 +156,12 @@ pub fn run() {
         Command::Send(args) => args
             .params(io::stdin())
             .and_then(|params| runtime.block_on(call::dispatch(&session, "mail.send", &params))),
+        Command::Draft(args) => args
+            .params(io::stdin())
+            .and_then(|params| runtime.block_on(session.dispatch("mail.draft", &params))),
+        Command::DraftDelete(args) => {
+            runtime.block_on(session.dispatch("mail.deleteDraft", &args.params()))
+        }
         Command::Info => runtime.block_on(session.dispatch("system.info", &empty)),
         Command::Accounts { .. } => runtime.block_on(session.dispatch("accounts.list", &empty)),
         Command::Providers { .. } => runtime.block_on(session.dispatch("providers.list", &empty)),
