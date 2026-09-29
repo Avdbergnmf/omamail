@@ -97,6 +97,9 @@ pub(crate) async fn delete_with(
     store: &impl DraftStore,
 ) -> Result<Value> {
     supported(&request.account)?;
+    if request.account.provider == Provider::Jmap {
+        return Err("mail_draft_unavailable");
+    }
     let mut result = json!({"dryRun":!request.execute,"executed":request.execute,"accountId":request.account.id,"id":request.id});
     if request.execute {
         store.delete(&request.account, &request.id).await?;

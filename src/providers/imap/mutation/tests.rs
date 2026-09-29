@@ -303,3 +303,26 @@ async fn invalid_draft_replacement_id_is_refused_before_append() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn deleting_a_draft_refuses_an_inbox_id_before_select_or_mutation() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let peer = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        let mut w: Wire = BufReader::new(Box::new(socket));
+        initialize(&mut w).await;
+        // A refusal closes the acquired wire: no SELECT/STORE/EXPUNGE is sent.
+        let mut byte = [0; 1];
+        assert_eq!(w.read(&mut byte).await.unwrap(), 0);
+    });
+    let mut p = params(port);
+    p["id"] = json!("7:INBOX");
+    assert_eq!(
+        super::super::call("imap.deleteDraft", &p)
+            .await
+            .unwrap_err(),
+        "not_a_draft"
+    );
+    peer.await.unwrap();
+}
