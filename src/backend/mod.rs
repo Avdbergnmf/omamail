@@ -63,7 +63,15 @@ impl Session {
         if method.starts_with("agent.") {
             return Err("unknown_method");
         }
-        if matches!(method, "mail.list" | "mail.read" | "mail.act" | "mail.send") {
+        if matches!(
+            method,
+            "mail.list"
+                | "mail.read"
+                | "mail.act"
+                | "mail.send"
+                | "mail.draft"
+                | "mail.deleteDraft"
+        ) {
             return Box::pin(self.mail_call(method, params)).await;
         }
         if matches!(method, "system.info" | "system.quit" | "providers.list") {

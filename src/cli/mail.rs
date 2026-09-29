@@ -143,6 +143,44 @@ pub(super) struct Send {
     attach: Vec<PathBuf>,
 }
 
+#[derive(Args)]
+pub(super) struct Draft {
+    #[command(flatten)]
+    message: Send,
+    /// An existing draft (message ID) this one replaces
+    #[arg(long, value_name = "MESSAGE_ID")]
+    replace: Option<String>,
+}
+
+impl Draft {
+    pub(super) fn params(&self, input: impl Read) -> Result<Value, &'static str> {
+        let mut params = self.message.params(input)?;
+        if let Some(id) = &self.replace {
+            params["replace"] = json!(id);
+        }
+        Ok(params)
+    }
+}
+
+#[derive(Args)]
+pub(super) struct DraftDelete {
+    #[command(flatten)]
+    account: AccountArg,
+    #[command(flatten)]
+    execution: ExecuteArg,
+    #[arg(value_name = "MESSAGE_ID")]
+    id: String,
+}
+
+impl DraftDelete {
+    pub(super) fn params(&self) -> Value {
+        let mut params = self.account.params();
+        params["id"] = json!(self.id);
+        params["execute"] = json!(self.execution.execute);
+        params
+    }
+}
+
 impl Send {
     pub(super) fn params(&self, input: impl Read) -> Result<Value, &'static str> {
         let mut bytes = Vec::new();

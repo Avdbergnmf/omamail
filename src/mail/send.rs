@@ -169,6 +169,19 @@ fn attachment(input: &super::AttachmentInput, total: &mut usize) -> Result<Value
 }
 
 pub(crate) fn prepare(request: &SendRequest, aliases: &Value) -> Result<Prepared> {
+    prepare_message(request, aliases, true)
+}
+
+/// A draft is the same validated message; it may not have recipients yet.
+pub(crate) fn prepare_draft(request: &SendRequest, aliases: &Value) -> Result<Prepared> {
+    prepare_message(request, aliases, false)
+}
+
+fn prepare_message(
+    request: &SendRequest,
+    aliases: &Value,
+    needs_recipients: bool,
+) -> Result<Prepared> {
     header(&request.from)?;
     header(&request.subject)?;
     if request.body.len() > MAX_BODY || request.body.contains('\0') {
@@ -181,7 +194,7 @@ pub(crate) fn prepare(request: &SendRequest, aliases: &Value) -> Result<Prepared
     let to = recipients(&request.to, &mut seen)?;
     let cc = recipients(&request.cc, &mut seen)?;
     let bcc = recipients(&request.bcc, &mut seen)?;
-    if seen.is_empty() {
+    if seen.is_empty() && needs_recipients {
         return Err("mail_send_no_recipients");
     }
     let aliases = aliases
