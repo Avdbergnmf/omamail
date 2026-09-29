@@ -405,6 +405,9 @@ pub(super) async fn call_planned(
             };
             json!({"saved":true,"warning":warning})
         } else if let Some((uid, folder)) = deleting {
+            if folder != resolve(&boxes, "\\Drafts")? {
+                return Err("not_a_draft");
+            }
             command(&mut w, &format!("SELECT {}", quote(&folder)?)).await?;
             delete_uid(&mut w, uid).await?;
             json!({})

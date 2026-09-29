@@ -146,3 +146,21 @@ fn draft_params_never_carry_an_outbox_identity() {
     let params = json!({"account":"","cc":["copy@example.org"],"sendId":"x"});
     assert!(DraftRequest::try_from(&params).is_err());
 }
+
+#[tokio::test]
+async fn unsupported_draft_deletion_is_refused_even_in_preview() {
+    let store = Store::default();
+    let request = DeleteDraftRequest {
+        account: Account {
+            id: "jmap:test".into(),
+            provider: Provider::Jmap,
+        },
+        id: "message".into(),
+        execute: false,
+    };
+    assert_eq!(
+        delete_with(request, &store).await.err(),
+        Some("mail_draft_unavailable")
+    );
+    assert!(store.deleted.lock().unwrap().is_empty());
+}
